@@ -6,6 +6,8 @@ It's not a particularly good kind of simulation but it works for now.
 # Notice on wiring
 Please note that the USB3.0 GND and +5V are swapped. Three of the 5 USB3 pins are used for TX/RX to the Pico W (To GP4 and GP5 for UART1)
 
+![Wiring from USB3 to Raspberry Pico W]https://github.com/No13/GoodwePico/blob/master/Connections.png?raw=true
+
 # How to replicate
 Buy a Pico W module, solder an old USB3 connector to it (make sure the USB3 cable is shielded. You need this for certain models of inverter as it is the only GND connection)
 Drag & drop a recent micropython version onto the flash (I use 1.20) and copy the two .py files using Thonny or any other tool to transfer code.
