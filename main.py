@@ -1,37 +1,25 @@
 """Main module to run programm
 """
-# pylint: disable=E0401
+# pylint: disable=W0702,W0718,E0401,W0621
 from time import sleep
-import network
-import machine
 import json
+import socket
+import select
+import machine
+import network
 from machine import Pin, UART, Timer
 from goodwecomm import GoodweComm
-import socket
 
 def write_config(config):
-    with open('config.json','w') as configfile:
+    """Write config.json with values
+    """
+    with open('config.json','w', encoding='utf-8') as configfile:
         json.dump(config, configfile)
-    
-try:
-    with open('config.json','r') as configfile:
-        config = json.load(configfile)
-except:
-    config = {
-        'psk': 'goodwewifi',
-        'ssid': '',
-        'goodwe_host': 'tcp.goodwe-power.com',
-        'goodwe_port': 20001,
-        }
-    write_config(config)
-
-uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
-uart.init(bits=8, parity=None, stop=1)
 
 def connect(ssid, psk):
     """Connect to WLAN
     """
-    if ssid is not "":
+    if ssid != "":
         wlan = network.WLAN(network.STA_IF)
         wlan.config(hostname='Goodwe-WIFI')
         wlan.active(True)
@@ -52,64 +40,89 @@ def connect(ssid, psk):
     wlan.active(True)
     return wlan
 
-wlan = connect(config['ssid'], config['psk'])
-goodwe = GoodweComm(uart, wlan, config)
-
 def main_loop(_):
     """Run listen functions within the timer
     """
     goodwe.listen_uart()
     goodwe.listen_tcp()
     goodwe.listen_udp()
+    webserver()
 
-loop_timer = Timer(
-    mode=Timer.PERIODIC,
-    period=300,
-    callback=main_loop)
+def webserver():
+    """Wait 50msec for connection, handle clients
+    """
+    res = poller.poll(50)
+    if res:
+        try:
+            conn, addr = s.accept()
+            print(f'Got a connection from {str(addr)}')
+            request = conn.recv(1024)
+            request = str(request)
+            #print('Content = %s' % request)
+            param = request.find('/config/?')
+            content = '<html><head></head><body>'
+            content += '<a href="/reset/">Reset PI</a><br />'
+            content += '<a href="/pvstat/">Get PV stats</a><br />'
 
+            if param > 0:
+                params = request[param:]
+                params = params[:params.find(' ')]
+                if 'ssid' in params:
+                    ssid = params[params.find('ssid=')+5:params.find('&')]
+                    print(f'SSID -{ssid}-')
+                    psk = params[params.find('psk=')+4:params.find(';')]
+                    print(f'PSK -{psk}-')
+                    config['ssid'] = ssid
+                    config['psk'] = psk
+                    write_config(config)
+                    content += "<h3>SSID info saved!</h3>"
+            if request.find('/reset/') > 0:
+                machine.reset()
+            if request.find('/pvstat/') > 0:
+                content = f'{goodwe.get_pv_stats()}'
+
+            conn.send('HTTP/1.1 200 OK\n')
+            if 'html' in content:
+                conn.send('Content-Type: text/html\n')
+            else:
+                conn.send('Content-Type: text/json\n')
+            conn.send('Connection: close\n\n')
+            conn.sendall(f'{content}')
+            conn.close()
+        except Exception as web_err:
+            print(f'Died {web_err}')
+
+# Load config for wifi credentials and goodwe communication host
+try:
+    with open('config.json', 'r', encoding='utf-8') as configfile:
+        config = json.load(configfile)
+except:
+    config = {
+        'psk': 'goodwewifi',
+        'ssid': '',
+        'goodwe_host': 'tcp.goodwe-power.com',
+        'goodwe_port': 20001,
+        }
+    write_config(config)
+
+# Create UART instance, needed for communication with inverter
+uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
+uart.init(bits=8, parity=None, stop=1)
+
+# Wifi object is used in communicating RSSI values to inverter
+wlan = connect(config['ssid'], config['psk'])
+goodwe = GoodweComm(uart, wlan, config)
+
+# Start webserver and use poll for handling connections
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind(('', 80))
 s.listen(5)
 print('Serving...')
-while True:
-    try:
-        conn, addr = s.accept()
-        print('Got a connection from %s' % str(addr))
-        request = conn.recv(1024)
-        request = str(request)
-        #print('Content = %s' % request)
-        param = request.find('/config/?')
-        content = '<html><head></head><body>'
-        content += '<a href="/reset/">Reset PI</a><br />'
-        content += '<a href="/pvstat/">Get PV stats</a><br />'
+poller = select.poll()
+poller.register(s, select.POLLIN)
 
-        if param > 0:
-            params = request[param:]
-            params = params[:params.find(' ')]
-            if 'ssid' in params:
-                ssid = params[params.find('ssid=')+5:params.find('&')]
-                print(f'SSID -{ssid}-')
-                psk = params[params.find('psk=')+4:params.find(';')]
-                print(f'PSK -{psk}-')
-                config['ssid'] = ssid
-                config['psk'] = psk
-                write_config(config)
-                content += "<h3>SSID info saved!</h3>"
-        if request.find('/reset/') > 0:
-            machine.reset()
-        if request.find('/pvstat/') > 0:
-            content = f'{goodwe.get_pv_stats()}'
-
-        conn.send('HTTP/1.1 200 OK\n')
-        if 'html' in content:
-            conn.send('Content-Type: text/html\n')
-        else:
-            conn.send('Content-Type: text/json\n')
-        conn.send('Connection: close\n\n')
-        conn.sendall(f'{content}')
-        conn.close()
-    except KeyboardInterrupt:
-        s.close()
-        break;
-    except Exception as web_err:
-        print(f'Died {web_err}')
+# This fires the main loop every 300 msec
+loop_timer = Timer(
+    mode=Timer.PERIODIC,
+    period=300,
+    callback=main_loop)

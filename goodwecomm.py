@@ -2,7 +2,7 @@
 """
 import time
 import socket
-
+#pylint: disable=W0702,W0511,W0718
 class GoodweComm:
     """Class for Goodwe XS communication based on AT commands
     """
@@ -156,11 +156,13 @@ class GoodweComm:
         for bit in self.wlan.config('mac'):
             part = f'{bit:#04x}'
             mac += part[2:]
+        gwport = self.config["goodwe_port"]
+        gwhost = self.config["goodwe_host"]
         # TODO: If new URL is sent via NETP we need to update config/script
         replies = {
             'APPVER': 'AT+APPVER\r\n\r+ok=v2.0.0.0\r\n\r\n',
             'ENTM': 'AT+ENTM\r\n\r+ok\r\n\r\n',
-            'NETP': f'AT+NETP\r\n+ok=TCP,Client,{self.config["goodwe_port"]},{self.config["goodwe_host"]}\r\n\r\n',
+            'NETP': f'AT+NETP\r\n+ok=TCP,Client,{gwport},{gwhost}\r\n\r\n',
             'PLANG': 'AT+PLANG\r\n\r+ok=EN\r\n\r\n',
             'TCPTO': f'AT+TCPTO={param}\r\n\r+ok\r\n\r\n',
             'WAP': 'AT+WAP\r\n\r+ok=11BGN,Solar-WiFi,AUTO\r\n\r\n',
@@ -188,27 +190,29 @@ class GoodweComm:
                 if crc & 0x0001:
                     crc = ((crc >> 1) & 0xFFFF) ^ poly
                 else:
-                    crc = ((crc >> 1) & 0xFFFF)
+                    crc = (crc >> 1) & 0xFFFF
         return crc
 
     def get_int(self, in_bytes):
         '''
         Convert powerrange of bytes to integer
         '''
-        if type(in_bytes) is int:
+        if isinstance(in_bytes, int):
             return in_bytes
         return int.from_bytes(in_bytes[:len(in_bytes)], 'big')
 
 
     def get_pv_stats(self):
-        # Send modbus command
+        """Send modbus command to inverter and output reply
+        """
         crc_data = 1
         crc_calc = 2
-        tries = 10
-        while (crc_data != crc_calc) and tries > 0:
+        tries = 5
+        while (crc_data != crc_calc) and (tries > 0):
+            timestamp = time.time()+2
             self.send_uart(b'\x7f\x03u\x94\x00I\xd5\xc2')
             bytes_data = bytearray()
-            while self.uart.any() == 0:
+            while (self.uart.any() == 0) and timestamp > time.time():
                 time.sleep(0.1)
             while self.uart.any() != 0:
                 time.sleep(0.05)
