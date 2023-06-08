@@ -10,7 +10,7 @@ Please note that the USB3.0 GND and +5V are swapped. Three of the 5 USB3 pins ar
 
 # How to replicate
 Buy a Pico W module, solder an old USB3 connector to it (make sure the USB3 cable is shielded. You need this for certain models of inverter as it is the only GND connection)
-Drag & drop a recent micropython version onto the flash (I use 1.20) and copy the two .py files using Thonny or any other tool to transfer code.
+Drag & drop a recent micropython version onto the flash (I use [1.20](https://micropython.org/download/rp2-pico-w/)) and copy the two .py files plus index.html onto the pico using Thonny or any other tool to transfer code.
 
 # First boot
 When you do not supply a config.json, the default will create this file and start an accesspoint on GoodweWIFI using psk 'goodwewifi'.
