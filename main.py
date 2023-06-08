@@ -59,12 +59,12 @@ def webserver():
             request = conn.recv(1024)
             request = str(request)
             #print('Content = %s' % request)
-            param = request.find('/config/?')
-            content = '<html><head></head><body>'
-            content += '<a href="/reset/">Reset PI</a><br />'
-            content += '<a href="/pvstat/">Get PV stats</a><br />'
-
+            content = htmlpage
+            param = request.find('/config')
             if param > 0:
+                content = '<html><head></head><body>'
+                content += '<a href="/reset/">Reset PI</a><br />'
+                content += '<a href="/pvstat/">Get PV stats</a><br />'
                 params = request[param:]
                 params = params[:params.find(' ')]
                 if 'ssid' in params:
@@ -79,13 +79,14 @@ def webserver():
             if request.find('/reset/') > 0:
                 machine.reset()
             if request.find('/pvstat/') > 0:
-                content = f'{goodwe.get_pv_stats()}'
+                content = json.dumps(goodwe.get_pv_stats())
 
             conn.send('HTTP/1.1 200 OK\n')
             if 'html' in content:
                 conn.send('Content-Type: text/html\n')
             else:
-                conn.send('Content-Type: text/json\n')
+                conn.send('Content-Type: application/json\n')
+                conn.send('Access-Control-Allow-Origin: *\n')
             conn.send('Connection: close\n\n')
             conn.sendall(f'{content}')
             conn.close()
@@ -105,6 +106,8 @@ except:
         }
     write_config(config)
 
+with open('index.html', 'r', encoding='utf-8') as indexhtml:
+    htmlpage = indexhtml.read()
 # Create UART instance, needed for communication with inverter
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=1)

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+   <meta charset='utf-8'>
+   <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+   <title>Solar stats</title>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  </head>
+  <body>
+    <div>
+      <canvas id="chart70">
+    </div>
+    <div>
+      <canvas id="chart_temp">
+    </div>
+    <script>
+      var labels = [];
+      var hist_watt = [];
+      var hist_volt = [];
+      var hist_temp = [];
+      var seconds = 0;
+
+      var ctx_temp = document.getElementById("chart_temp").getContext("2d");
+      var chart_temp = new Chart(ctx_temp, { 
+              type: "line", 
+              data: {'labels': labels, 'datasets': 
+                [
+                  {'data': hist_temp, 'label': 'Degrees', 'backgroundColor': '#770077'}
+                ]}, 
+              options: { 
+                plugins: {'title': {'display': 'true', 'text': 'Temperature'}} }});
+      
+      
+      var ctx70 = document.getElementById("chart70").getContext("2d");
+      var chart70 = new Chart(ctx70, { 
+              type: "line", 
+              data: {'labels': labels, 'datasets': 
+                [
+                  {'data': hist_watt, 'label': 'Watt', 'backgroundColor': '#17becf'},
+                  {'data': hist_volt, 'label': 'Volt', 'backgroundColor': '#ff0000', 'yAxisID': 'y1'}
+                ]}, 
+              options: { 
+                scales: {y: {position: 'left'}, y1: {position: 'right'}}, 
+                plugins: {'title': {'display': 'true', 'text': 'Power Stats'}} }});
+      
+      function parseJson(data) {
+        labels.push(seconds);
+        seconds += 1;
+        hist_watt.push(data.power);
+        hist_volt.push(data.vac);
+        hist_temp.push(data.temp);
+      };
+      function updateData() {
+        console.log('*** Start');
+        test = $.ajax({
+          type: "GET",
+          dataType: "json",
+          url: "/pvstat/",
+          success: parseJson,
+          error: function(one, err, tek) { console.log(err); console.log(tek);},
+          
+          });
+
+        chart70.update();
+        chart_temp.update();
+      };
+      updateData();
+      setInterval(updateData, 15000);
+
+    </script>
+  </body>
+</html>
