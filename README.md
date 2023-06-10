@@ -16,10 +16,14 @@ Drag & drop a recent micropython version onto the flash (I use [1.20](https://mi
 When you do not supply a config.json, the default will create this file and start an accesspoint on GoodweWIFI using psk 'goodwewifi'.
 Fill your own config.json with the appropriate stuff to connect to your own network
 
-# What now?
+# What now / Features
 The module should connect to tcp.goodwe-power.com on port 20001 to send information back to the SEMS portal (I do not use this).
 On port 8899 (udp) it will listen for the magic UDP packet (modbus?) to reply with the actual status
 On port 80 there is a *very* limited webserver from which you can reset the module or try to read the status.
+
+The previous update added Chart.js to the webpage. No stats are stored on the module (in flash or RAM) so when keeping the page open it will collect new data every 15 seconds.
+
+![Chart.js example](https://github.com/No13/GoodwePico/blob/master/Chartjs.png?raw=true)
 
 # TODO?
 I think setting values will not work over UDP (untested) and discovery (port 48899) is not implemented.

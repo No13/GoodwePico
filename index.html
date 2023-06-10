@@ -19,7 +19,6 @@
       var hist_watt = [];
       var hist_volt = [];
       var hist_temp = [];
-      var seconds = 0;
 
       var ctx_temp = document.getElementById("chart_temp").getContext("2d");
       var chart_temp = new Chart(ctx_temp, { 
@@ -45,8 +44,13 @@
                 plugins: {'title': {'display': 'true', 'text': 'Power Stats'}} }});
       
       function parseJson(data) {
-        labels.push(seconds);
-        seconds += 1;
+        let datum = new Date();
+        let datumstr = datum.getHours()+':';
+        if (datum.getMinutes() < 10) { datumstr += '0'; };
+        datumstr += datum.getMinutes()+':';
+        if (datum.getSeconds() < 10) { datumstr += '0'; };
+        datumstr += datum.getSeconds();
+        labels.push(datumstr);
         hist_watt.push(data.power);
         hist_volt.push(data.vac);
         hist_temp.push(data.temp);
