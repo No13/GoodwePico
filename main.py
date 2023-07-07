@@ -9,6 +9,7 @@ import machine
 import network
 from machine import Pin, UART, Timer
 from goodwecomm import GoodweComm
+from log import Logger
 
 def write_config(config):
     """Write config.json with values
@@ -40,6 +41,24 @@ def connect(ssid, psk):
     wlan.active(True)
     return wlan
 
+# Load config for wifi credentials and goodwe communication host
+try:
+    with open('config.json', 'r', encoding='utf-8') as configfile:
+        config = json.load(configfile)
+except:
+    config = {
+        'psk': 'goodwewifi',
+        'ssid': '',
+        'call_home': True,
+        'goodwe_host': 'tcp.goodwe-power.com',
+        'goodwe_port': 20001,
+        'syslog_host': '10.4.10.17',
+        'syslog_port': 5514,
+        }
+    write_config(config)
+
+log = Logger(config['syslog_host'], config['syslog_port'])
+
 def main_loop(_):
     """Run listen functions within the timer
     """
@@ -55,7 +74,7 @@ def webserver():
     if res:
         try:
             conn, addr = s.accept()
-            print(f'Got a connection from {str(addr)}')
+            log.send(f'Got a connection from {str(addr)}')
             request = conn.recv(1024)
             request = str(request)
             #print('Content = %s' % request)
@@ -69,9 +88,9 @@ def webserver():
                 params = params[:params.find(' ')]
                 if 'ssid' in params:
                     ssid = params[params.find('ssid=')+5:params.find('&')]
-                    print(f'SSID -{ssid}-')
+                    log.send(f'SSID -{ssid}-')
                     psk = params[params.find('psk=')+4:params.find(';')]
-                    print(f'PSK -{psk}-')
+                    log.send(f'PSK -{psk}-')
                     config['ssid'] = ssid
                     config['psk'] = psk
                     write_config(config)
@@ -91,20 +110,7 @@ def webserver():
             conn.sendall(f'{content}')
             conn.close()
         except Exception as web_err:
-            print(f'Died {web_err}')
-
-# Load config for wifi credentials and goodwe communication host
-try:
-    with open('config.json', 'r', encoding='utf-8') as configfile:
-        config = json.load(configfile)
-except:
-    config = {
-        'psk': 'goodwewifi',
-        'ssid': '',
-        'goodwe_host': 'tcp.goodwe-power.com',
-        'goodwe_port': 20001,
-        }
-    write_config(config)
+            log.send(f'Died {web_err}')
 
 with open('index.html', 'r', encoding='utf-8') as indexhtml:
     htmlpage = indexhtml.read()
@@ -121,7 +127,7 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(('', 80))
 s.listen(5)
-print('Serving...')
+log.send('Serving...')
 poller = select.poll()
 poller.register(s, select.POLLIN)
 

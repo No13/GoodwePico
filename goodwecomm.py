@@ -2,6 +2,8 @@
 """
 import time
 import socket
+from log import Logger
+
 #pylint: disable=W0702,W0511,W0718
 class GoodweComm:
     """Class for Goodwe XS communication based on AT commands
@@ -21,6 +23,7 @@ class GoodweComm:
         self.udp_socket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
         self.udp_socket.bind(('',8899))
         self.udp_socket.settimeout(0)
+        self.log = Logger(config['syslog_host'], config['syslog_port'])
 
     def listen_udp(self):
         """Check for new UDP packets and parse it
@@ -42,7 +45,7 @@ class GoodweComm:
                 recv_data = self.tcp_socket.recv(2048)
                 if len(recv_data) > 10:
                     self.uart.write(recv_data)
-                    print(f"TCP reply: {recv_data}")
+                    self.log.send(f"TCP reply: {recv_data}")
             except:
                 pass
 
@@ -53,7 +56,8 @@ class GoodweComm:
         # If data is actively being received; please wait a bit for it to settle
         bytes_on_serial = self.uart.any()
         bytes_data = bytearray()
-        while self.uart.any() != 0:
+        timeout = time.time() + 5
+        while self.uart.any() != 0 and time.time() < timeout:
             time.sleep(0.05)
             for bit in self.uart.read(bytes_on_serial):
                 bytes_data.append(bit)
@@ -94,7 +98,8 @@ class GoodweComm:
         # Case 'POSTGW'
         if (data_len > 6 and
             bytes_data[0:6] == b'POSTGW'):
-            self.send_tcp(bytes_data)
+            if self.config['call_home']:
+                self.send_tcp(bytes_data)
             return
         # Case other
         if data_len > 3:
@@ -103,13 +108,13 @@ class GoodweComm:
     def send_uart(self, data):
         """Send data on UART
         """
-        print(f'uart {data}')
+        self.log.send(f'uart {data}')
         self.uart.write(data)
 
     def send_tcp(self, data):
         """Send data on new TCP link
         """
-        print(f'tcp {len(data)} {data}')
+        self.log.send(f'TGP send {len(data)} {data}')
         if not self.tcp_socket:
             self.tcp_socket = socket.socket()
             self.tcp_socket.settimeout(0)
@@ -126,14 +131,14 @@ class GoodweComm:
                 self.tcp_socket.close()
             finally:
                 self.tcp_socket = None
-            print(f"TCP error {tcp_error}")
+            self.log.send(f"TCP error {tcp_error}")
 
     def send_udp(self, data):
         """Send data on existing UDP connection
         """
         if self.udp_conn:
             self.udp_socket.sendto(data, self.udp_conn)
-        print(f'udp {len(data)} {data}')
+        # print(f'udp {len(data)} {data}')
 
     def __parse_at__(self, data):
         """Parse and handle AT data
@@ -212,19 +217,19 @@ class GoodweComm:
             timestamp = time.time()+2
             self.send_uart(b'\x7f\x03u\x94\x00I\xd5\xc2')
             bytes_data = bytearray()
-            while (self.uart.any() == 0) and timestamp > time.time():
+            while (self.uart.any() == 0) and time.time() < timestamp:
                 time.sleep(0.1)
-            while self.uart.any() != 0:
+            while self.uart.any() != 0 and time.time() < timestamp:
                 time.sleep(0.05)
                 for bit in self.uart.read(self.uart.any()):
                     bytes_data.append(bit)
-            print(f'Data is binnen: #{tries} {bytes_data}')
+            self.log.send(f'Data is binnen: #{tries} {bytes_data}')
             crc_data = bytes_data[-1:].hex()+bytes_data[-2:-1].hex()
             crc_calc = hex(self.crc16(bytes_data[2:-2]))[2:]
             tries -= 1
         #return f'{len(bytes_data)} {crc_data} {crc_calc}'
         if crc_data == crc_calc:
-            print('Success!')
+            self.log.send('Success decoding data')
             inverter_data = {
                 'error': 'no error',
                 'vpv1': round(self.get_int(bytes_data[11:13])*0.1, 2),
